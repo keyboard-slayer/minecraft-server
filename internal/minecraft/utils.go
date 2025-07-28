@@ -17,7 +17,12 @@ func readVarIntFromBuff(buff []byte) (int, int, error) {
 	var idx int = 0
 
 	for {
+		if idx >= len(buff) {
+			return 0, 0, errors.New("unexpected end of buffer while reading VarInt")
+		}
+
 		currentByte := buff[idx]
+		idx += 1
 
 		value |= (int(currentByte) & SEGMENT_BITS) << pos
 
@@ -26,8 +31,6 @@ func readVarIntFromBuff(buff []byte) (int, int, error) {
 		}
 
 		pos += 7
-		idx += 1
-
 		if pos >= 32 {
 			return 0, 0, errors.New("VarInt is too big")
 		}
@@ -60,17 +63,12 @@ type factoryPair struct {
 
 func uuidFactory(buffer []byte) ([]byte, any, error) {
 	id, err := uuid.FromBytes(buffer[0:16])
-
-	if len(buffer) == 16 {
-		return []byte{}, id, err
-	}
-
-	return buffer[17:], id, err
+	return buffer[16:], id, err
 }
 
 func intFactory(buffer []byte) ([]byte, any, error) {
 	r, sz, err := readVarIntFromBuff(buffer)
-	return buffer[sz+1:], r, err
+	return buffer[sz:], r, err
 }
 
 func bytesFactory(buffer []byte) ([]byte, any, error) {
@@ -79,34 +77,28 @@ func bytesFactory(buffer []byte) ([]byte, any, error) {
 		return []byte{}, "", nil
 	}
 
-	ret := buffer[sz+1 : sz+1+length]
-	return buffer[sz+1+length:], ret, nil
-}
-
-func stringFactory(buffer []byte) ([]byte, any, error) {
-	length, sz, err := readVarIntFromBuff(buffer)
-	if err != nil {
-		return []byte{}, "", nil
+	if length > len(buffer[sz:]) {
+		return []byte{}, "", errors.New("length is larger then the length of the buffer")
 	}
 
-	ret := string(buffer[sz+1 : sz+1+length])
-	return buffer[sz+1+length:], ret, nil
+	ret := buffer[sz : sz+length]
+	return buffer[sz+length:], ret, nil
 }
 
 func ushortFactory(buffer []byte) ([]byte, any, error) {
 	return buffer[2:], (int(buffer[0]) << 8) | int(buffer[1]), nil
 }
 
-func readFromBuffer(buffer []byte, pairs map[string]factory) (map[string]any, error) {
+func readFromBuffer(buffer []byte, pairs ...factoryPair) (map[string]any, error) {
 	results := make(map[string]any)
 
-	for key, factory := range pairs {
-		tmp, ret, err := factory(buffer)
+	for _, p := range pairs {
+		tmp, ret, err := p.factory(buffer)
 		if err != nil {
 			return map[string]any{}, err
 		}
 
-		results[key] = ret
+		results[p.name] = ret
 		buffer = tmp
 	}
 

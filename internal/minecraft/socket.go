@@ -39,6 +39,7 @@ func (self Server) Serve() {
 
 func (self Server) handle(socket net.Conn) {
 	c, err := newClient(socket)
+
 	if err != nil {
 		slog.Error("Couldn't create client object", "error", err)
 		return
@@ -47,25 +48,34 @@ func (self Server) handle(socket net.Conn) {
 	defer c.close()
 
 	for {
+		byte, err := c.reader.Peek(1)
+		if err != nil {
+			continue
+		}
+
+		if byte[0] == 0xFE {
+			// Ignoring legacy ping request
+			continue
+		}
+
 		length, _, err := c.readVarInt()
 		if err != nil {
-			// slog.Error("Couldn't read length", "error", err)
-			return
+			continue
 		}
 
-		id, sz, err := c.readVarInt()
-		if err != nil {
-			slog.Error("Couldn't get packet id", "error", err)
-			return
-		}
-
-		data, err := c.read(length - sz)
+		data, err := c.read(length)
 		if err != nil {
 			c.logger.Error("Couldn't read from socket", "error", err)
 			return
 		}
 
-		err = router(&c, id, data)
+		id, sz, err := readVarIntFromBuff(data)
+		if err != nil {
+			slog.Error("Couldn't get packet id", "error", err)
+			return
+		}
+
+		err = router(&c, id, data[sz:])
 		if err != nil {
 			c.logger.Error(fmt.Sprintf("%s", err))
 			return

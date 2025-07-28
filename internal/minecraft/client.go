@@ -1,6 +1,7 @@
 package minecraft
 
 import (
+	"bufio"
 	"errors"
 	"net"
 	"os"
@@ -28,6 +29,7 @@ type userInfo struct {
 type client struct {
 	logger *slog.Logger
 	socket net.Conn
+	reader *bufio.Reader
 	info   userInfo
 	key    *rsa.PrivateKey
 	rng    []byte
@@ -56,11 +58,12 @@ func newClient(socket net.Conn) (client, error) {
 
 	return client{
 		logger: logger,
+		reader: bufio.NewReader(socket),
 		info:   userInfo{},
 		socket: socket,
 		key:    key,
 		rng:    rng,
-		state:  0,
+		state:  Handshaking,
 	}, nil
 }
 
@@ -125,7 +128,7 @@ func (self client) read(length int) ([]byte, error) {
 	}
 
 	buff := make([]byte, length)
-	_, err := self.socket.Read(buff)
+	_, err := self.reader.Read(buff)
 
 	if err != nil {
 		return []byte{}, err
@@ -148,6 +151,8 @@ func (self client) readVarInt() (int, int, error) {
 
 	for {
 		currentByte, err := self.read(1)
+		length += 1
+
 		if err != nil {
 			return 0, 0, err
 		}
@@ -159,15 +164,13 @@ func (self client) readVarInt() (int, int, error) {
 		}
 
 		pos += 7
-		length += 1
 
 		if pos >= 32 {
 			return 0, 0, errors.New("VarInt is too big")
 		}
 	}
 
-	return value, length + 1, nil
-
+	return value, length, nil
 }
 
 func (self *client) register(name string, id uuid.UUID) {

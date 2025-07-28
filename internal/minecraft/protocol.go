@@ -68,10 +68,10 @@ func protocol1(c *client, data []byte) error {
 	case Login:
 		// key
 
-		m, err := readFromBuffer(data, map[string]factory{
-			"secret": bytesFactory,
-			"token":  bytesFactory,
-		})
+		m, err := readFromBuffer(data,
+			factoryPair{"secret", bytesFactory},
+			factoryPair{"token", bytesFactory},
+		)
 
 		if err != nil {
 			return err
@@ -116,20 +116,22 @@ func protocol0(c *client, data []byte) error {
 	case Handshaking:
 		// intention
 
-		m, err := readFromBuffer(data, map[string]factory{
-			"protocol": intFactory,
-			"host":     stringFactory,
-			"port":     ushortFactory,
-			"intent":   intFactory,
-		})
+		c.logger.Debug("", "buffer", data)
+
+		m, err := readFromBuffer(data,
+			factoryPair{"protocol", intFactory},
+			factoryPair{"host", bytesFactory},
+			factoryPair{"port", ushortFactory},
+			factoryPair{"intent", intFactory},
+		)
 
 		if err != nil {
 			return err
 		}
 
-		c.logger.Debug("", "protocol", m["protocol"])
-		c.logger.Debug("", "host", m["host"].(string))
-		c.logger.Debug("", "port", m["port"])
+		c.logger.Debug("", "protocol", m["protocol"].(int))
+		c.logger.Debug("", "host", string(m["host"].([]byte)))
+		c.logger.Debug("", "port", m["port"].(int))
 
 		c.state = State(m["intent"].(int))
 
@@ -166,16 +168,16 @@ func protocol0(c *client, data []byte) error {
 
 	case Login:
 		// hello
-		m, err := readFromBuffer(data, map[string]factory{
-			"username": stringFactory,
-			"uuid":     uuidFactory,
-		})
+		m, err := readFromBuffer(data,
+			factoryPair{"username", bytesFactory},
+			factoryPair{"uuid", uuidFactory},
+		)
 
 		if err != nil {
 			return err
 		}
 
-		username := m["username"].(string)
+		username := string(m["username"].([]byte))
 		id := m["uuid"].(uuid.UUID)
 
 		c.register(username, id)
@@ -197,6 +199,29 @@ func protocol0(c *client, data []byte) error {
 	return nil
 }
 
+func protocol2(c *client, data []byte) error {
+	switch c.state {
+	case Config:
+		// custom_payload
+		m, err := readFromBuffer(data,
+			factoryPair{"channel", bytesFactory},
+			factoryPair{"data", bytesFactory},
+		)
+
+		if err != nil {
+			return err
+		}
+
+		c.logger.Debug("", "channel", string(m["channel"].([]byte)))
+		c.logger.Debug("", "data", m["data"].([]byte))
+
+	default:
+		return fmt.Errorf("State not handled %v", c.state)
+	}
+
+	return nil
+}
+
 func protocol3(c *client, data []byte) error {
 	switch c.state {
 	case Login:
@@ -205,14 +230,5 @@ func protocol3(c *client, data []byte) error {
 	default:
 		return fmt.Errorf("State not handled %v", c.state)
 	}
-	return nil
-}
-
-func protocol2(c *client, data []byte) error {
-	switch c.state {
-	default:
-		return fmt.Errorf("State not handled %v", c.state)
-	}
-
 	return nil
 }
