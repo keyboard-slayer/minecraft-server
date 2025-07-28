@@ -36,7 +36,6 @@ type client struct {
 	enc    cipher.Stream
 	dec    cipher.Stream
 	state  State
-	intent int
 }
 
 func newClient(socket net.Conn) (client, error) {
