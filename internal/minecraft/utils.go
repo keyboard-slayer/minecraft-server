@@ -89,6 +89,10 @@ func ushortFactory(buffer []byte) ([]byte, any, error) {
 	return buffer[2:], (int(buffer[0]) << 8) | int(buffer[1]), nil
 }
 
+func byteFactory(buffer []byte) ([]byte, any, error) {
+	return buffer[1:], buffer[0], nil
+}
+
 func readFromBuffer(buffer []byte, pairs ...factoryPair) (map[string]any, error) {
 	results := make(map[string]any)
 

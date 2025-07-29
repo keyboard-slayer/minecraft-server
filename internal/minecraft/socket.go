@@ -24,6 +24,8 @@ func New(port uint16) (Server, error) {
 
 func (self Server) Serve() {
 	slog.Info(fmt.Sprintf("Serving server on %s", self.socket.Addr().String()))
+	clientId := 0
+
 	for {
 		conn, err := self.socket.Accept()
 		if err != nil {
@@ -33,12 +35,13 @@ func (self Server) Serve() {
 
 		slog.Info(fmt.Sprintf("New connection from %s", conn.RemoteAddr().String()))
 
-		go self.handle(conn)
+		go self.handle(conn, clientId)
+		clientId += 1
 	}
 }
 
-func (self Server) handle(socket net.Conn) {
-	c, err := newClient(socket)
+func (self Server) handle(socket net.Conn, clientId int) {
+	c, err := newClient(socket, clientId)
 
 	if err != nil {
 		slog.Error("Couldn't create client object", "error", err)
